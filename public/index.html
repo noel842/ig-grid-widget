@@ -128,9 +128,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <label>Caption property</label>
     <input type="text" id="cap-prop" value="Caption">
   </div>
-  <div class="field">
-    <label>Grid filter property</label>
-    <input type="text" id="grid-prop" value="Grid">
+  <div class="frow">
+    <div class="field">
+      <label>Accounts property</label>
+      <input type="text" id="prof-prop" value="Accounts">
+    </div>
+    <div class="field">
+      <label>Grid filter property</label>
+      <input type="text" id="grid-prop" value="Grid">
+    </div>
   </div>
   <button class="go-btn" id="go-btn" onclick="connect()">Connect &amp; preview</button>
   <div class="err" id="err"></div>
@@ -157,6 +163,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 
 
+
+  <!-- Profile dropdown -->
+  <div id="prof-switcher" style="padding:10px 14px 0;display:none">
+    <select id="prof-select" onchange="switchProfile(this.value)" style="width:100%;padding:8px 10px;border:1.5px solid #dbdbdb;border-radius:8px;font-size:13px;color:#0a0a0a;background:#fff;outline:none;cursor:pointer;appearance:auto"></select>
+  </div>
 
   <!-- Status tabs -->
   <div class="tabs">
@@ -194,7 +205,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <script>
 const STORE_KEY = 'ig-widget-config';
-let allPosts = [], curProfile = 'all', curTab = 'all';
+let allPosts = [], curProfile = '', curTab = 'all';
 const now = new Date();
 
 /* ── helpers ── */
@@ -240,6 +251,7 @@ function saveConfig() {
     dateProp: document.getElementById('date-prop').value.trim(),
     capProp:  document.getElementById('cap-prop').value.trim(),
     handle:   document.getElementById('handle').value.trim(),
+    profProp: document.getElementById('prof-prop').value.trim(),
     gridProp: document.getElementById('grid-prop').value.trim(),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch(e) {}
@@ -254,6 +266,7 @@ function loadConfig() {
     document.getElementById('date-prop').value = cfg.dateProp || 'Post Date';
     document.getElementById('cap-prop').value  = cfg.capProp  || 'Caption';
     if (document.getElementById('handle')) document.getElementById('handle').value = cfg.handle || '';
+    if (document.getElementById('prof-prop')) document.getElementById('prof-prop').value = cfg.profProp || 'Accounts';
     document.getElementById('grid-prop').value = cfg.gridProp || 'Grid';
     return !!(cfg.tok && cfg.dbid);
   } catch(e) { return false; }
@@ -266,6 +279,7 @@ async function fetchPosts() {
   const imgProp  = document.getElementById('img-prop').value.trim()  || 'Drive Link';
   const dateProp = document.getElementById('date-prop').value.trim() || 'Post Date';
   const capProp  = document.getElementById('cap-prop').value.trim()  || 'Caption';
+  const profProp = document.getElementById('prof-prop').value.trim() || 'Accounts';
   const gridProp = document.getElementById('grid-prop').value.trim() || 'Grid';
 
   const res = await fetch('/api/notion', {
@@ -292,7 +306,7 @@ async function fetchPosts() {
 
   const raw = (data.results || []).map(pg => {
     const p = pg.properties || {};
-    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], gv = p[gridProp];
+    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], pv = p[profProp], gv = p[gridProp];
     const titv = p['Name'] || p['Title'] || Object.values(p).find(x => x.type === 'title');
     return {
       title:   titv?.title?.map(t => t.plain_text).join('') || '',
@@ -300,6 +314,7 @@ async function fetchPosts() {
       date:    dv?.date?.start || null,
       caption: cv?.rich_text?.map(t => t.plain_text).join('') || '',
 
+      profile: (pv && (pv.select?.name || pv.multi_select?.[0]?.name || pv.rich_text?.[0]?.plain_text || '')) || '',
       inGrid:  gv ? (gv.checkbox === true) : true,
     };
   });
@@ -347,7 +362,7 @@ async function refresh() {
 function showFeed() {
   document.getElementById('setup').style.display = 'none';
   document.getElementById('feed').style.display = 'block';
-  curProfile = 'all'; curTab = 'all';
+  curProfile = ''; curTab = 'all';
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   document.getElementById('tab-all').classList.add('on');
   renderProfiles();
@@ -355,8 +370,28 @@ function showFeed() {
 }
 
 function renderProfiles() {
-  const handle = document.getElementById('handle') ? document.getElementById('handle').value.trim() : '';
-  updateHeader(handle || 'profile');
+  const profiles = [...new Set(allPosts.map(p => p.profile).filter(Boolean))].sort();
+  const switcher = document.getElementById('prof-switcher');
+  const sel = document.getElementById('prof-select');
+
+  if (profiles.length === 0) {
+    switcher.style.display = 'none';
+    updateHeader('');
+    return;
+  }
+
+  // Default to first alphabetical profile on first load
+  if (!curProfile || !profiles.includes(curProfile)) {
+    curProfile = profiles[0];
+  }
+
+  sel.innerHTML = profiles.map(function(pr) {
+    const sel_ = pr === curProfile ? ' selected' : '';
+    return '<option value="' + pr.replace(/"/g,'&quot;') + '"' + sel_ + '>' + pr + '</option>';
+  }).join('');
+
+  switcher.style.display = profiles.length > 1 ? 'block' : 'none';
+  updateHeader(curProfile);
 }
 
 function updateHeader(profileName) {
@@ -371,6 +406,12 @@ function updateHeader(profileName) {
 
 
 
+function switchProfile(name) {
+  curProfile = name;
+  updateHeader(curProfile);
+  renderGrid();
+}
+
 function setTab(name, el) {
   curTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
@@ -379,7 +420,8 @@ function setTab(name, el) {
 }
 
 function filteredByProfile() {
-  return allPosts;
+  if (!curProfile) return allPosts;
+  return allPosts.filter(p => p.profile === curProfile);
 }
 
 function filteredView() {
