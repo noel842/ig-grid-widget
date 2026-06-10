@@ -40,8 +40,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cnt-l{font-size:11px;color:#737373}
 
 /* profile switcher */
-.prof-switcher{padding:10px 14px 0}
-#prof-select:focus{border-color:#833AB4}
+
 
 /* status tabs */
 .tabs{display:flex;border-top:1px solid #dbdbdb;margin-top:12px}
@@ -105,9 +104,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <label>Notion integration token</label>
     <input type="password" id="tok" placeholder="secret_xxxxxxxxxxxx" autocomplete="off">
   </div>
-  <div class="field">
-    <label>Database ID</label>
-    <input type="text" id="dbid" placeholder="32-character ID from your Notion URL">
+  <div class="frow">
+    <div class="field">
+      <label>Database ID</label>
+      <input type="text" id="dbid" placeholder="32-character ID from your Notion URL">
+    </div>
+    <div class="field">
+      <label>Instagram handle</label>
+      <input type="text" id="handle" placeholder="@campi.florida">
+    </div>
   </div>
   <div class="frow">
     <div class="field">
@@ -119,22 +124,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <input type="text" id="date-prop" value="Post Date">
     </div>
   </div>
-  <div class="frow">
-    <div class="field">
-      <label>Caption property</label>
-      <input type="text" id="cap-prop" value="Caption">
-    </div>
-    <div class="field">
-      <label>Profile property</label>
-      <input type="text" id="prof-prop" value="Accounts">
-    </div>
+  <div class="field">
+    <label>Caption property</label>
+    <input type="text" id="cap-prop" value="Caption">
   </div>
-  <div class="frow">
-    <div class="field">
-      <label>Grid filter property</label>
-      <input type="text" id="grid-prop" value="Grid">
-    </div>
-    <div class="field"></div>
+  <div class="field">
+    <label>Grid filter property</label>
+    <input type="text" id="grid-prop" value="Grid">
   </div>
   <button class="go-btn" id="go-btn" onclick="connect()">Connect &amp; preview</button>
   <div class="err" id="err"></div>
@@ -160,10 +156,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
-  <!-- Profile dropdown -->
-  <div class="prof-switcher" id="prof-switcher" style="padding:10px 14px 0;display:none">
-    <select id="prof-select" onchange="switchProfileSelect(this)" style="width:100%;padding:8px 10px;border:1.5px solid #dbdbdb;border-radius:8px;font-size:13px;color:#0a0a0a;background:#fff;outline:none;cursor:pointer"></select>
-  </div>
+
 
   <!-- Status tabs -->
   <div class="tabs">
@@ -246,7 +239,7 @@ function saveConfig() {
     imgProp:  document.getElementById('img-prop').value.trim(),
     dateProp: document.getElementById('date-prop').value.trim(),
     capProp:  document.getElementById('cap-prop').value.trim(),
-    profProp: document.getElementById('prof-prop').value.trim(),
+    handle:   document.getElementById('handle').value.trim(),
     gridProp: document.getElementById('grid-prop').value.trim(),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch(e) {}
@@ -260,7 +253,7 @@ function loadConfig() {
     document.getElementById('img-prop').value  = cfg.imgProp  || 'Drive Link';
     document.getElementById('date-prop').value = cfg.dateProp || 'Post Date';
     document.getElementById('cap-prop').value  = cfg.capProp  || 'Caption';
-    document.getElementById('prof-prop').value = cfg.profProp || 'Accounts';
+    if (document.getElementById('handle')) document.getElementById('handle').value = cfg.handle || '';
     document.getElementById('grid-prop').value = cfg.gridProp || 'Grid';
     return !!(cfg.tok && cfg.dbid);
   } catch(e) { return false; }
@@ -273,7 +266,6 @@ async function fetchPosts() {
   const imgProp  = document.getElementById('img-prop').value.trim()  || 'Drive Link';
   const dateProp = document.getElementById('date-prop').value.trim() || 'Post Date';
   const capProp  = document.getElementById('cap-prop').value.trim()  || 'Caption';
-  const profProp = document.getElementById('prof-prop').value.trim() || 'Accounts';
   const gridProp = document.getElementById('grid-prop').value.trim() || 'Grid';
 
   const res = await fetch('/api/notion', {
@@ -300,14 +292,14 @@ async function fetchPosts() {
 
   const raw = (data.results || []).map(pg => {
     const p = pg.properties || {};
-    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], pv = p[profProp], gv = p[gridProp];
+    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], gv = p[gridProp];
     const titv = p['Name'] || p['Title'] || Object.values(p).find(x => x.type === 'title');
     return {
       title:   titv?.title?.map(t => t.plain_text).join('') || '',
       url:     tv?.url || tv?.rich_text?.[0]?.plain_text || null,
       date:    dv?.date?.start || null,
       caption: cv?.rich_text?.map(t => t.plain_text).join('') || '',
-      profile: (pv && (pv.select?.name || pv.multi_select?.[0]?.name || pv.rich_text?.[0]?.plain_text || pv.formula?.string || '')) || '',
+
       inGrid:  gv ? (gv.checkbox === true) : true,
     };
   });
@@ -363,43 +355,21 @@ function showFeed() {
 }
 
 function renderProfiles() {
-  const profiles = [...new Set(allPosts.map(p => p.profile).filter(Boolean))].sort();
-  const switcher = document.getElementById('prof-switcher');
-
-  if (profiles.length === 0) {
-    switcher.style.display = 'none';
-    updateHeader('');
-    return;
-  }
-
-  switcher.style.display = 'flex';
-  const allOn = curProfile === 'all' ? ' on' : '';
-  let html = '<div class="prof-chip' + allOn + '" onclick="switchProfile(\'all\',this)">All</div>';
-  profiles.forEach(function(pr) {
-    const on = curProfile === pr ? ' on' : '';
-    const safe = pr.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    html += '<div class="prof-chip' + on + '" onclick="switchProfile(\'' + safe + '\',this)">' + pr + '</div>';
-  });
-  switcher.innerHTML = html;
-  updateHeader(curProfile === 'all' ? 'All profiles' : curProfile);
+  const handle = document.getElementById('handle') ? document.getElementById('handle').value.trim() : '';
+  updateHeader(handle || 'profile');
 }
 
 function updateHeader(profileName) {
-  const handle = profileName.startsWith('@') ? profileName : (profileName ? '@' + profileName : '@profile');
-  document.getElementById('av').textContent = profileName.replace('@','').slice(0,2).toUpperCase() || 'IG';
-  document.getElementById('ph').textContent = handle;
-
+  const h = profileName.startsWith('@') ? profileName : (profileName ? '@' + profileName : '@profile');
+  document.getElementById('av').textContent = h.replace('@','').slice(0,2).toUpperCase() || 'IG';
+  document.getElementById('ph').textContent = h;
   const fp = filteredByProfile();
   document.getElementById('ct').textContent = fp.length;
   document.getElementById('cu').textContent = fp.filter(p => status(p.date) !== 'pb').length;
   document.getElementById('cp').textContent = fp.filter(p => status(p.date) === 'pb').length;
 }
 
-function switchProfileSelect(sel) {
-  curProfile = sel.value;
-  updateHeader(curProfile === 'all' ? 'All profiles' : curProfile);
-  renderGrid();
-}
+
 
 function setTab(name, el) {
   curTab = name;
@@ -409,8 +379,7 @@ function setTab(name, el) {
 }
 
 function filteredByProfile() {
-  if (curProfile === 'all') return allPosts;
-  return allPosts.filter(p => p.profile === curProfile);
+  return allPosts;
 }
 
 function filteredView() {
