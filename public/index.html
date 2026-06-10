@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IG Grid Preview</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;color:#0a0a0a;min-height:100vh}
+
+  /* setup */
+  #setup{max-width:440px;margin:0 auto;padding:32px 20px}
+  #setup h1{font-size:16px;font-weight:700;margin-bottom:4px}
+  #setup p{font-size:12px;color:#737373;margin-bottom:24px;line-height:1.5}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:11px;font-weight:600;color:#404040;margin-bottom:5px;letter-spacing:.02em}
+  .field input{width:100%;padding:9px 11px;border:1.5px solid #e5e5e5;border-radius:10px;font-size:13px;color:#0a0a0a;background:#fff;outline:none;transition:border-color .15s}
+  .field input:focus{border-color:#833AB4}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .go-btn{width:100%;padding:11px;border:none;border-radius:10px;background:linear-gradient(135deg,#833AB4 0%,#C13584 50%,#E1306C 100%);color:#fff;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.02em;transition:opacity .15s;margin-top:6px}
+  .go-btn:hover{opacity:.88}
+  .go-btn:disabled{opacity:.45;cursor:not-allowed}
+  .err{margin-top:12px;padding:9px 12px;background:#fff0f0;border:1px solid #fca5a5;border-radius:8px;font-size:12px;color:#b91c1c;line-height:1.5;display:none}
+  .hint{margin-top:16px;padding:11px 13px;background:#f5f5f5;border-radius:8px;font-size:11px;color:#737373;line-height:1.65}
+  .hint b{color:#404040}
+
+  /* profile */
+  #feed{display:none;max-width:480px;margin:0 auto;background:#fff;border:1px solid #dbdbdb}
+  .prof{padding:16px 16px 0}
+  .prof-top{display:flex;align-items:center;gap:22px;margin-bottom:14px}
+  .av-ring{width:72px;height:72px;flex-shrink:0;border-radius:50%;padding:2.5px;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
+  .av-inner{width:100%;height:100%;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#833AB4;border:2px solid #fff}
+  .prof-right{flex:1}
+  .prof-handle{font-size:14px;font-weight:600;margin-bottom:10px}
+  .prof-counts{display:flex;gap:20px}
+  .cnt{text-align:center}
+  .cnt-n{display:block;font-size:14px;font-weight:600}
+  .cnt-l{font-size:11px;color:#737373}
+  .prof-name{font-size:12px;color:#737373;padding:0 16px 12px}
+
+  /* tabs */
+  .tabs{display:flex;border-top:1px solid #dbdbdb}
+  .tab{flex:1;padding:11px 0;text-align:center;font-size:11px;font-weight:700;color:#8e8e8e;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-top:2px solid transparent;margin-top:-1px;transition:all .12s}
+  .tab.on{color:#0a0a0a;border-top-color:#0a0a0a}
+
+  /* grid */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:#dbdbdb}
+  .cell{aspect-ratio:1;position:relative;overflow:hidden;cursor:pointer;background:#efefef}
+  .cell img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}
+  .cell:hover img{transform:scale(1.05)}
+  .no-img{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#c7c7c7;font-size:28px}
+  .cell-ov{position:absolute;inset:0;background:rgba(0,0,0,.4);opacity:0;transition:opacity .16s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px}
+  .cell:hover .cell-ov{opacity:1}
+  .ov-date{font-size:10px;font-weight:700;color:#fff;background:rgba(131,58,180,.85);border-radius:20px;padding:3px 10px;white-space:nowrap}
+  .ov-title{font-size:10px;color:rgba(255,255,255,.9);text-align:center;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:90%}
+  .dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,255,255,.85)}
+  .d-up{background:#facc15}
+  .d-td{background:#f97316}
+  .d-pb{background:#4ade80}
+  .dimmed::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,.25);pointer-events:none}
+  .empty-cell{aspect-ratio:1;background:#fafafa;display:flex;align-items:center;justify-content:center;color:#e5e5e5;font-size:22px}
+
+  /* states */
+  .state{padding:48px 20px;text-align:center;color:#a3a3a3;font-size:13px;background:#fafafa}
+
+  /* bottom bar */
+  .bar{padding:10px 14px;border-top:1px solid #efefef;display:flex;justify-content:space-between;align-items:center}
+  .bar-btn{font-size:12px;color:#833AB4;background:none;border:none;cursor:pointer;font-weight:600;padding:0}
+  .bar-btn:hover{text-decoration:underline}
+  .bar-info{font-size:11px;color:#a3a3a3}
+
+  /* modal */
+  .mbk{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;align-items:center;justify-content:center;padding:16px}
+  .mbk.on{display:flex}
+  .mbox{background:#fff;border-radius:3px;overflow:hidden;width:100%;max-width:340px}
+  .mbox img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:#efefef}
+  .mno-img{width:100%;aspect-ratio:1;background:#efefef;display:flex;align-items:center;justify-content:center;color:#c7c7c7;font-size:40px}
+  .mbody{padding:14px 16px}
+  .mtop{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .mpill{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700}
+  .mp-up{background:#fef9c3;color:#854d0e}
+  .mp-td{background:#ffedd5;color:#9a3412}
+  .mp-pb{background:#dcfce7;color:#166534}
+  .mclose{background:none;border:none;cursor:pointer;font-size:22px;color:#737373;line-height:1}
+  .mclose:hover{color:#0a0a0a}
+  .mtitle{font-size:14px;font-weight:700;margin-bottom:6px}
+  .mcap{font-size:12px;color:#525252;line-height:1.6}
+  .mlink{display:inline-block;margin-top:10px;font-size:11px;color:#833AB4;text-decoration:none;font-weight:600}
+  .mlink:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <h1>Instagram grid preview</h1>
+  <p>Connect your Notion content calendar and preview your feed as an Instagram grid.</p>
+
+  <div class="field">
+    <label>Notion integration token</label>
+    <input type="password" id="tok" placeholder="secret_xxxxxxxxxxxx" autocomplete="off">
+  </div>
+  <div class="field">
+    <label>Database ID</label>
+    <input type="text" id="dbid" placeholder="Paste from your Notion database URL">
+  </div>
+  <div class="row">
+    <div class="field">
+      <label>Image URL property name</label>
+      <input type="text" id="img-prop" value="Drive link">
+    </div>
+    <div class="field">
+      <label>Publish date property name</label>
+      <input type="text" id="date-prop" value="Publish date">
+    </div>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label>Caption property name</label>
+      <input type="text" id="cap-prop" value="Caption">
+    </div>
+    <div class="field">
+      <label>Your Instagram handle</label>
+      <input type="text" id="handle" placeholder="@campi.florida">
+    </div>
+  </div>
+  <button class="go-btn" id="go-btn" onclick="load()">Preview grid</button>
+  <div class="err" id="err"></div>
+  <div class="hint">
+    <b>Property names are case-sensitive</b> — they must match your Notion columns exactly.<br>
+    Drive images must be set to <b>Anyone with the link → Viewer</b> in Google Drive.
+  </div>
+</div>
+
+<div id="feed">
+  <div class="prof">
+    <div class="prof-top">
+      <div class="av-ring"><div class="av-inner" id="av">IG</div></div>
+      <div class="prof-right">
+        <div class="prof-handle" id="ph">@yourbrand</div>
+        <div class="prof-counts">
+          <div class="cnt"><span class="cnt-n" id="ct">0</span><span class="cnt-l">posts</span></div>
+          <div class="cnt"><span class="cnt-n" id="cu">0</span><span class="cnt-l">upcoming</span></div>
+          <div class="cnt"><span class="cnt-n" id="cp">0</span><span class="cnt-l">published</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="prof-name" id="pn"></div>
+  <div class="tabs">
+    <div class="tab on" id="tab-all"    onclick="tab('all',this)">Grid</div>
+    <div class="tab"    id="tab-up"     onclick="tab('upcoming',this)">Upcoming</div>
+    <div class="tab"    id="tab-pub"    onclick="tab('published',this)">Published</div>
+  </div>
+  <div id="grid-wrap"></div>
+  <div class="bar">
+    <button class="bar-btn" onclick="back()">&#8592; Settings</button>
+    <button class="bar-btn" onclick="load()">&#8635; Refresh</button>
+    <span class="bar-info" id="bar-info"></span>
+  </div>
+</div>
+
+<div class="mbk" id="mbk" onclick="closeMif(event)">
+  <div class="mbox" id="mbox">
+    <img id="mi" src="" alt="" style="display:none">
+    <div class="mno-img" id="mni" style="display:none">&#128247;</div>
+    <div class="mbody">
+      <div class="mtop">
+        <span class="mpill" id="mpill"></span>
+        <button class="mclose" onclick="closeM()" aria-label="Close">&#215;</button>
+      </div>
+      <div class="mtitle" id="mt"></div>
+      <div class="mcap" id="mc"></div>
+      <a class="mlink" id="ml" href="#" target="_blank" rel="noopener" style="display:none">Open in Drive &#8599;</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  let posts = [], curTab = 'all';
+  const now = new Date();
+
+  function thumb(url) {
+    if (!url) return null;
+    const m = url.match(/\/d\/([\w-]+)/);
+    if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w600';
+    if (/^https?:\/\//.test(url)) return url;
+    return null;
+  }
+
+  function fmt(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function status(iso) {
+    if (!iso) return 'up';
+    const d = new Date(iso);
+    if (d < now) return 'pb';
+    const t = new Date(); t.setHours(0,0,0,0);
+    if (d.toDateString() === t.toDateString()) return 'td';
+    return 'up';
+  }
+
+  function statusLabel(s, iso) {
+    if (s === 'pb') return 'Published ' + fmt(iso);
+    if (s === 'td') return 'Posting today';
+    return 'Scheduled ' + fmt(iso);
+  }
+
+  async function load() {
+    const tok  = document.getElementById('tok').value.trim();
+    const dbid = document.getElementById('dbid').value.trim().replace(/-/g,'').replace(/\?.*/,'');
+    const imgP = document.getElementById('img-prop').value.trim()  || 'Drive link';
+    const datP = document.getElementById('date-prop').value.trim() || 'Publish date';
+    const capP = document.getElementById('cap-prop').value.trim()  || 'Caption';
+    const hand = document.getElementById('handle').value.trim()    || '@yourbrand';
+    const err  = document.getElementById('err');
+    err.style.display = 'none';
+
+    if (!tok)  { showErr('Enter your Notion integration token.'); return; }
+    if (!dbid) { showErr('Enter your database ID.'); return; }
+
+    const btn = document.getElementById('go-btn');
+    btn.disabled = true; btn.textContent = 'Loading…';
+
+    const fmtId = dbid.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
+
+    try {
+      const res = await fetch('/api/notion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-notion-token': tok,
+          'x-database-id': fmtId,
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const c = data.code || '';
+        if (res.status === 401 || c === 'unauthorized')
+          throw new Error('Invalid token. Check your integration secret at notion.so/my-integrations.');
+        if (res.status === 403 || c === 'restricted_resource')
+          throw new Error('Access denied. Open your Notion database → ··· → Connections → connect your integration.');
+        if (res.status === 404)
+          throw new Error('Database not found. Double-check the ID from your Notion URL.');
+        throw new Error(data.error || 'Error ' + res.status);
+      }
+
+      posts = (data.results || []).map(pg => {
+        const p = pg.properties || {};
+        const tv = p[imgP], dv = p[datP], cv = p[capP];
+        const titv = p['Name'] || p['Title'] || Object.values(p).find(x => x.type === 'title');
+        return {
+          title:    titv?.title?.map(t => t.plain_text).join('') || '',
+          url:      tv?.url || tv?.rich_text?.[0]?.plain_text || null,
+          date:     dv?.date?.start || null,
+          caption:  cv?.rich_text?.map(t => t.plain_text).join('') || '',
+        };
+      });
+
+      posts.sort((a,b) => {
+        if (!a.date) return 1; if (!b.date) return -1;
+        return new Date(a.date) - new Date(b.date);
+      });
+
+      const h = hand.startsWith('@') ? hand : '@' + hand;
+      document.getElementById('av').textContent = hand.replace('@','').slice(0,2).toUpperCase() || 'IG';
+      document.getElementById('ph').textContent = h;
+      document.getElementById('pn').textContent = '';
+      document.getElementById('ct').textContent = posts.length;
+      document.getElementById('cu').textContent = posts.filter(p => status(p.date) !== 'pb').length;
+      document.getElementById('cp').textContent = posts.filter(p => status(p.date) === 'pb').length;
+      document.getElementById('bar-info').textContent = posts.length + ' posts loaded';
+
+      document.getElementById('setup').style.display = 'none';
+      document.getElementById('feed').style.display = 'block';
+      renderGrid('all');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+      document.getElementById('tab-all').classList.add('on');
+      curTab = 'all';
+
+    } catch(ex) {
+      showErr(ex.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Preview grid';
+    }
+  }
+
+  function showErr(msg) {
+    const e = document.getElementById('err');
+    e.textContent = msg; e.style.display = 'block';
+  }
+
+  function back() {
+    document.getElementById('feed').style.display = 'none';
+    document.getElementById('setup').style.display = 'block';
+  }
+
+  function tab(name, el) {
+    curTab = name;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+    el.classList.add('on');
+    renderGrid(name);
+  }
+
+  function filtered(name) {
+    if (name === 'upcoming')  return posts.filter(p => status(p.date) !== 'pb');
+    if (name === 'published') return posts.filter(p => status(p.date) === 'pb');
+    return posts;
+  }
+
+  function renderGrid(name) {
+    const fp = filtered(name);
+    const wrap = document.getElementById('grid-wrap');
+    if (!fp.length) {
+      wrap.innerHTML = '<div class="state">No posts in this view.</div>';
+      return;
+    }
+    const total = Math.ceil(Math.max(fp.length, 9) / 3) * 3;
+    let h = '<div class="grid">';
+    for (let i = 0; i < total; i++) {
+      const p = fp[i];
+      if (!p) { h += '<div class="empty-cell">+</div>'; continue; }
+      const t = thumb(p.url);
+      const s = status(p.date);
+      h += `<div class="cell${s==='pb'?' dimmed':''}" onclick="openM(${i},'${name}')">
+        ${t ? `<img src="${t}" alt="" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><div class="no-img" style="display:none;position:absolute;inset:0">&#128247;</div>`
+            : `<div class="no-img">&#128247;</div>`}
+        <div class="dot d-${s}"></div>
+        <div class="cell-ov">
+          ${p.date ? `<div class="ov-date">${s==='pb'?'&#10003; ':''}${fmt(p.date)}</div>` : ''}
+          ${p.title ? `<div class="ov-title">${p.title}</div>` : ''}
+        </div>
+      </div>`;
+    }
+    h += '</div>';
+    wrap.innerHTML = h;
+  }
+
+  function openM(i, name) {
+    const fp = filtered(name);
+    const p = fp[i]; if (!p) return;
+    const t = thumb(p.url);
+    const mi = document.getElementById('mi'), mni = document.getElementById('mni');
+    if (t) { mi.src = t; mi.style.display = 'block'; mni.style.display = 'none'; }
+    else   { mi.style.display = 'none'; mni.style.display = 'flex'; }
+    const s = status(p.date);
+    const pill = document.getElementById('mpill');
+    pill.textContent = statusLabel(s, p.date);
+    pill.className = 'mpill mp-' + s;
+    document.getElementById('mt').textContent = p.title || '';
+    document.getElementById('mc').textContent = p.caption || '';
+    const ml = document.getElementById('ml');
+    if (p.url) { ml.href = p.url; ml.style.display = 'inline-block'; }
+    else ml.style.display = 'none';
+    document.getElementById('mbk').classList.add('on');
+  }
+
+  function closeMif(e) { if (e.target === document.getElementById('mbk')) closeM(); }
+  function closeM() { document.getElementById('mbk').classList.remove('on'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeM(); });
+</script>
+</body>
+</html>
