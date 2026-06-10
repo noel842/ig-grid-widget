@@ -40,9 +40,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cnt-l{font-size:11px;color:#737373}
 
 /* profile switcher */
-.prof-switcher{display:flex;gap:6px;padding:10px 14px 0;flex-wrap:wrap}
-.prof-chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid #dbdbdb;background:#fff;color:#737373;transition:all .12s;white-space:nowrap}
-.prof-chip.on{background:linear-gradient(135deg,#833AB4,#C13584,#E1306C);color:#fff;border-color:transparent}
+.prof-switcher{padding:10px 14px 0}
+#prof-select:focus{border-color:#833AB4}
 
 /* status tabs */
 .tabs{display:flex;border-top:1px solid #dbdbdb;margin-top:12px}
@@ -127,8 +126,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="field">
       <label>Profile property</label>
-      <input type="text" id="prof-prop" value="Account">
+      <input type="text" id="prof-prop" value="Accounts">
     </div>
+  </div>
+  <div class="frow">
+    <div class="field">
+      <label>Grid filter property</label>
+      <input type="text" id="grid-prop" value="Grid">
+    </div>
+    <div class="field"></div>
   </div>
   <button class="go-btn" id="go-btn" onclick="connect()">Connect &amp; preview</button>
   <div class="err" id="err"></div>
@@ -154,8 +160,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
-  <!-- Profile chips -->
-  <div class="prof-switcher" id="prof-switcher"></div>
+  <!-- Profile dropdown -->
+  <div class="prof-switcher" id="prof-switcher" style="padding:10px 14px 0;display:none">
+    <select id="prof-select" onchange="switchProfileSelect(this)" style="width:100%;padding:8px 10px;border:1.5px solid #dbdbdb;border-radius:8px;font-size:13px;color:#0a0a0a;background:#fff;outline:none;cursor:pointer"></select>
+  </div>
 
   <!-- Status tabs -->
   <div class="tabs">
@@ -239,6 +247,7 @@ function saveConfig() {
     dateProp: document.getElementById('date-prop').value.trim(),
     capProp:  document.getElementById('cap-prop').value.trim(),
     profProp: document.getElementById('prof-prop').value.trim(),
+    gridProp: document.getElementById('grid-prop').value.trim(),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch(e) {}
 }
@@ -251,7 +260,8 @@ function loadConfig() {
     document.getElementById('img-prop').value  = cfg.imgProp  || 'Drive Link';
     document.getElementById('date-prop').value = cfg.dateProp || 'Post Date';
     document.getElementById('cap-prop').value  = cfg.capProp  || 'Caption';
-    document.getElementById('prof-prop').value = cfg.profProp || 'Account';
+    document.getElementById('prof-prop').value = cfg.profProp || 'Accounts';
+    document.getElementById('grid-prop').value = cfg.gridProp || 'Grid';
     return !!(cfg.tok && cfg.dbid);
   } catch(e) { return false; }
 }
@@ -263,7 +273,8 @@ async function fetchPosts() {
   const imgProp  = document.getElementById('img-prop').value.trim()  || 'Drive Link';
   const dateProp = document.getElementById('date-prop').value.trim() || 'Post Date';
   const capProp  = document.getElementById('cap-prop').value.trim()  || 'Caption';
-  const profProp = document.getElementById('prof-prop').value.trim() || 'Account';
+  const profProp = document.getElementById('prof-prop').value.trim() || 'Accounts';
+  const gridProp = document.getElementById('grid-prop').value.trim() || 'Grid';
 
   const res = await fetch('/api/notion', {
     method: 'POST',
@@ -287,18 +298,20 @@ async function fetchPosts() {
     throw new Error(data.error || 'Error ' + res.status);
   }
 
-  return (data.results || []).map(pg => {
+  const raw = (data.results || []).map(pg => {
     const p = pg.properties || {};
-    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], pv = p[profProp];
+    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], pv = p[profProp], gv = p[gridProp];
     const titv = p['Name'] || p['Title'] || Object.values(p).find(x => x.type === 'title');
     return {
       title:   titv?.title?.map(t => t.plain_text).join('') || '',
       url:     tv?.url || tv?.rich_text?.[0]?.plain_text || null,
       date:    dv?.date?.start || null,
       caption: cv?.rich_text?.map(t => t.plain_text).join('') || '',
-      profile: pv?.select?.name || pv?.rich_text?.[0]?.plain_text || '',
+      profile: (pv && (pv.select?.name || pv.multi_select?.[0]?.name || pv.rich_text?.[0]?.plain_text || pv.formula?.string || '')) || '',
+      inGrid:  gv ? (gv.checkbox === true) : true,
     };
   });
+  return raw.filter(p => p.inGrid);
 }
 
 /* ── connect ── */
@@ -350,21 +363,22 @@ function showFeed() {
 }
 
 function renderProfiles() {
-  // collect unique profiles
   const profiles = [...new Set(allPosts.map(p => p.profile).filter(Boolean))].sort();
   const switcher = document.getElementById('prof-switcher');
 
-  if (profiles.length <= 1) {
+  if (profiles.length === 0) {
     switcher.style.display = 'none';
-    updateHeader(curProfile === 'all' ? (profiles[0] || '') : curProfile);
+    updateHeader('');
     return;
   }
 
   switcher.style.display = 'flex';
-  let html = `<div class="prof-chip ${curProfile==='all'?'on':''}" onclick="switchProfile('all',this)">All profiles</div>`;
-  profiles.forEach(pr => {
+  const allOn = curProfile === 'all' ? ' on' : '';
+  let html = '<div class="prof-chip' + allOn + '" onclick="switchProfile(\'all\',this)">All</div>';
+  profiles.forEach(function(pr) {
     const on = curProfile === pr ? ' on' : '';
-    html += `<div class="prof-chip${on}" onclick="switchProfile('${pr.replace(/'/g,"\\'")}',this)">${pr}</div>`;
+    const safe = pr.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    html += '<div class="prof-chip' + on + '" onclick="switchProfile(\'' + safe + '\',this)">' + pr + '</div>';
   });
   switcher.innerHTML = html;
   updateHeader(curProfile === 'all' ? 'All profiles' : curProfile);
@@ -381,11 +395,9 @@ function updateHeader(profileName) {
   document.getElementById('cp').textContent = fp.filter(p => status(p.date) === 'pb').length;
 }
 
-function switchProfile(name, el) {
-  curProfile = name;
-  document.querySelectorAll('.prof-chip').forEach(c => c.classList.remove('on'));
-  el.classList.add('on');
-  updateHeader(name === 'all' ? 'All profiles' : name);
+function switchProfileSelect(sel) {
+  curProfile = sel.value;
+  updateHeader(curProfile === 'all' ? 'All profiles' : curProfile);
   renderGrid();
 }
 
@@ -412,7 +424,7 @@ function renderGrid() {
   const posts = filteredView();
   posts.sort((a,b) => {
     if (!a.date) return 1; if (!b.date) return -1;
-    return new Date(a.date) - new Date(b.date);
+    return new Date(b.date) - new Date(a.date);
   });
 
   const wrap = document.getElementById('grid-wrap');
@@ -449,7 +461,7 @@ function openM(i) {
   const posts = filteredView();
   posts.sort((a,b) => {
     if (!a.date) return 1; if (!b.date) return -1;
-    return new Date(a.date) - new Date(b.date);
+    return new Date(b.date) - new Date(a.date);
   });
   const p = posts[i]; if (!p) return;
   const t = thumb(p.url);
