@@ -529,17 +529,37 @@ async function captureGrid() {
   btn.disabled = true;
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg> Saving…';
 
-  try {
-    const grid = document.querySelector('#grid-wrap .grid');
-    if (!grid) { alert('No grid to capture.'); return; }
+  const grid = document.querySelector('#grid-wrap .grid');
+  if (!grid) {
+    alert('No grid to capture.');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save grid';
+    return;
+  }
 
-    // Temporarily hide overlays and dots for a clean capture
+  // Step 1: proxy all Drive images to base64 to avoid CORS blocking canvas
+  const imgs = Array.from(grid.querySelectorAll('img'));
+  const origSrcs = imgs.map(img => img.src);
+
+  try {
+    await Promise.all(imgs.map(async (img) => {
+      const src = img.src;
+      if (!src || !src.includes('drive.google.com')) return;
+      try {
+        const r = await fetch('/api/image?url=' + encodeURIComponent(src));
+        const data = await r.json();
+        if (data.dataUrl) img.src = data.dataUrl;
+      } catch(e) { /* leave original if proxy fails */ }
+    }));
+
+    // Step 2: hide overlays/dots for clean capture
     const overlays = grid.querySelectorAll('.cell-ov, .dot, .type-icon');
     overlays.forEach(el => el.style.opacity = '0');
 
+    // Step 3: capture
     const canvas = await html2canvas(grid, {
-      useCORS: true,
-      allowTaint: true,
+      useCORS: false,
+      allowTaint: false,
       scale: 2,
       backgroundColor: '#dbdbdb',
       logging: false,
@@ -547,16 +567,22 @@ async function captureGrid() {
 
     overlays.forEach(el => el.style.opacity = '');
 
+    // Step 4: download
     const link = document.createElement('a');
     const tab = document.querySelector('.tab.on');
-    const tabName = tab ? tab.textContent.trim().toLowerCase() : 'grid';
-    const prof = (document.getElementById('ph').textContent || 'profile').replace('@','');
+    const tabName = tab ? tab.textContent.trim().toLowerCase().replace(/\s+/g,'-') : 'grid';
+    const prof = (document.getElementById('ph').textContent || 'profile').replace('@','').replace(/\s+/g,'-');
     link.download = prof + '-' + tabName + '-' + new Date().toISOString().slice(0,10) + '.png';
     link.href = canvas.toDataURL('image/png');
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+
   } catch(err) {
     alert('Could not capture: ' + err.message);
   } finally {
+    // Restore original image srcs
+    imgs.forEach((img, i) => { img.src = origSrcs[i]; });
     btn.disabled = false;
     btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save grid';
   }
