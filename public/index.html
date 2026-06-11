@@ -64,6 +64,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .dimmed::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,.25);pointer-events:none}
 .empty-cell{aspect-ratio:4/5;background:#fafafa;display:flex;align-items:center;justify-content:center;color:#e5e5e5;font-size:22px}
 
+/* post type icons */
+.type-icon{position:absolute;top:6px;left:6px;display:flex;gap:3px}
+.type-icon svg{width:18px;height:18px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+
 /* state */
 .state{padding:44px 20px;text-align:center;color:#a3a3a3;font-size:13px;background:#fafafa}
 
@@ -110,8 +114,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <input type="text" id="dbid" placeholder="32-character ID from your Notion URL">
     </div>
     <div class="field">
-      <label>Instagram handle</label>
-      <input type="text" id="handle" placeholder="@campi.florida">
+      <label>Post type property</label>
+      <input type="text" id="type-prop" value="Type">
     </div>
   </div>
   <div class="frow">
@@ -233,6 +237,19 @@ function statusLabel(s, iso) {
   if (s === 'td') return 'Posting today';
   return 'Scheduled ' + fmt(iso);
 }
+function typeIcon(type) {
+  const t = (type || '').toLowerCase();
+  if (t === 'reel') {
+    // Instagram reels icon (film/play)
+    return '<div class="type-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="white" fill-opacity="0.15"/><path d="M3 6h18M3 10h18M7 3v4M12 3v4M17 3v4M5 14l5 3-5 3V14z" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+  }
+  if (t === 'carousel') {
+    // Instagram carousel icon (stacked squares)
+    return '<div class="type-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="13" height="13" rx="2" stroke="white" stroke-width="1.8"/><path d="M17 4h3a2 2 0 0 1 2 2v13" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M13 2h3a2 2 0 0 1 2 2v13" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg></div>';
+  }
+  return '';
+}
+
 function fmtId(raw) {
   const c = raw.replace(/-/g,'').replace(/\?.*/,'');
   return c.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
@@ -250,7 +267,7 @@ function saveConfig() {
     imgProp:  document.getElementById('img-prop').value.trim(),
     dateProp: document.getElementById('date-prop').value.trim(),
     capProp:  document.getElementById('cap-prop').value.trim(),
-    handle:   document.getElementById('handle').value.trim(),
+    typeProp: document.getElementById('type-prop').value.trim(),
     profProp: document.getElementById('prof-prop').value.trim(),
     gridProp: document.getElementById('grid-prop').value.trim(),
   };
@@ -265,7 +282,7 @@ function loadConfig() {
     document.getElementById('img-prop').value  = cfg.imgProp  || 'Drive Link';
     document.getElementById('date-prop').value = cfg.dateProp || 'Post Date';
     document.getElementById('cap-prop').value  = cfg.capProp  || 'Caption';
-    if (document.getElementById('handle')) document.getElementById('handle').value = cfg.handle || '';
+    if (document.getElementById('type-prop')) document.getElementById('type-prop').value = cfg.typeProp || 'Type';
     if (document.getElementById('prof-prop')) document.getElementById('prof-prop').value = cfg.profProp || 'Accounts';
     document.getElementById('grid-prop').value = cfg.gridProp || 'Grid';
     return !!(cfg.tok && cfg.dbid);
@@ -280,6 +297,7 @@ async function fetchPosts() {
   const dateProp = document.getElementById('date-prop').value.trim() || 'Post Date';
   const capProp  = document.getElementById('cap-prop').value.trim()  || 'Caption';
   const profProp = document.getElementById('prof-prop').value.trim() || 'Accounts';
+  const typeProp = document.getElementById('type-prop').value.trim() || 'Type';
   const gridProp = document.getElementById('grid-prop').value.trim() || 'Grid';
 
   const res = await fetch('/api/notion', {
@@ -306,7 +324,7 @@ async function fetchPosts() {
 
   const raw = (data.results || []).map(pg => {
     const p = pg.properties || {};
-    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], pv = p[profProp], gv = p[gridProp];
+    const tv = p[imgProp], dv = p[dateProp], cv = p[capProp], pv = p[profProp], gv = p[gridProp], tyv = p[typeProp];
     const titv = p['Name'] || p['Title'] || Object.values(p).find(x => x.type === 'title');
     return {
       title:   titv?.title?.map(t => t.plain_text).join('') || '',
@@ -315,10 +333,11 @@ async function fetchPosts() {
       caption: cv?.rich_text?.map(t => t.plain_text).join('') || '',
 
       profile: (pv && (pv.select?.name || pv.multi_select?.[0]?.name || pv.rich_text?.[0]?.plain_text || '')) || '',
+      type:    (tyv && (tyv.select?.name || tyv.multi_select?.[0]?.name || '')) || '',
       inGrid:  gv ? (gv.checkbox === true) : true,
     };
   });
-  return raw.filter(p => p.inGrid);
+  return raw.filter(p => p.inGrid && p.date);
 }
 
 /* ── connect ── */
@@ -458,6 +477,7 @@ function renderGrid() {
         ? `<img src="${t}" alt="" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><div class="no-img" style="display:none;position:absolute;inset:0">&#128247;</div>`
         : `<div class="no-img">&#128247;</div>`}
       <div class="dot d-${s}"></div>
+      ${typeIcon(p.type)}
       <div class="cell-ov">
         ${p.date   ? `<div class="ov-date">${s==='pb'?'&#10003; ':''}${fmt(p.date)}</div>` : ''}
         ${p.title  ? `<div class="ov-title">${p.title}</div>` : ''}
@@ -483,7 +503,7 @@ function openM(i) {
   const pill = document.getElementById('mpill');
   pill.textContent = statusLabel(s, p.date);
   pill.className = 'mpill mp-' + s;
-  document.getElementById('mprof').textContent = p.profile ? p.profile : '';
+  document.getElementById('mprof').textContent = [p.profile, p.type].filter(Boolean).join(' · ');
   document.getElementById('mt').textContent = p.title || '';
   document.getElementById('mc').textContent = p.caption || '';
   const ml = document.getElementById('ml');
