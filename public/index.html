@@ -530,22 +530,28 @@ function closeM() { document.getElementById('mbk').classList.remove('on'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeM(); });
 
 function back() {
+  inSettings = true;
   document.getElementById('feed').style.display = 'none';
   document.getElementById('setup').style.display = 'block';
+  const btn = document.getElementById('go-btn');
+  btn.disabled = false;
+  btn.textContent = 'Connect & preview';
 }
 
 /* ── auto-connect on load if saved config exists ── */
+let inSettings = false;
 window.addEventListener('DOMContentLoaded', async () => {
   const hasSaved = loadConfig();
-  if (hasSaved) {
-    const btn = document.getElementById('go-btn');
-    btn.disabled = true; btn.textContent = 'Reconnecting…';
-    try {
-      allPosts = await fetchPosts();
-      showFeed();
-    } catch(ex) {
-      btn.disabled = false; btn.textContent = 'Connect & preview';
-    }
+  if (!hasSaved) return;
+  const btn = document.getElementById('go-btn');
+  btn.disabled = true; btn.textContent = 'Reconnecting…';
+  try {
+    allPosts = await fetchPosts();
+    // Only show feed if user hasn't navigated back to settings
+    if (!inSettings) showFeed();
+    else { btn.disabled = false; btn.textContent = 'Connect & preview'; }
+  } catch(ex) {
+    btn.disabled = false; btn.textContent = 'Connect & preview';
   }
 });
 </script>
