@@ -215,8 +215,13 @@ const now = new Date();
 /* ── helpers ── */
 function thumb(url) {
   if (!url) return null;
+  // Google Drive
   const m = url.match(/\/d\/([\w-]+)/);
   if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w600';
+  // Dropbox — swap dl=0 or ?dl=0 for ?raw=1
+  if (url.includes('dropbox.com')) {
+    return url.replace(/[?&]dl=\d/, '').replace(/[?&]raw=\d/, '').replace(/\?/, '?raw=1&').replace(/dropbox\.com/, 'dl.dropboxusercontent.com');
+  }
   if (/^https?:\/\//.test(url)) return url;
   return null;
 }
