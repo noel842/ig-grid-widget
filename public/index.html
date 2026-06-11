@@ -337,7 +337,7 @@ async function fetchPosts() {
       inGrid:  gv ? (gv.checkbox === true) : true,
     };
   });
-  return raw.filter(p => p.inGrid && p.date);
+  return raw.filter(p => p.inGrid);
 }
 
 /* ── connect ── */
@@ -445,9 +445,9 @@ function filteredByProfile() {
 
 function filteredView() {
   const fp = filteredByProfile();
-  if (curTab === 'upcoming')  return fp.filter(p => status(p.date) !== 'pb');
-  if (curTab === 'published') return fp.filter(p => status(p.date) === 'pb');
-  return fp;
+  if (curTab === 'upcoming')  return fp.filter(p => !p.date || status(p.date) !== 'pb');
+  if (curTab === 'published') return fp.filter(p => p.date && status(p.date) === 'pb');
+  return fp.filter(p => !!p.date);
 }
 
 function renderGrid() {
