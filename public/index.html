@@ -225,13 +225,20 @@ function thumb(url) {
   if (/^https?:\/\//.test(url)) return url;
   return null;
 }
+function parseDate(iso) {
+  if (!iso) return null;
+  // Parse YYYY-MM-DD as local time to avoid UTC-offset day shift
+  const parts = iso.split('T')[0].split('-');
+  if (parts.length === 3) return new Date(+parts[0], +parts[1] - 1, +parts[2]);
+  return new Date(iso);
+}
 function fmt(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parseDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 function status(iso) {
   if (!iso) return 'up';
-  const d = new Date(iso);
+  const d = parseDate(iso);
   if (d < now) return 'pb';
   const t = new Date(); t.setHours(0,0,0,0);
   if (d.toDateString() === t.toDateString()) return 'td';
@@ -457,7 +464,7 @@ function renderGrid() {
   const posts = filteredView();
   posts.sort((a,b) => {
     if (!a.date) return 1; if (!b.date) return -1;
-    return new Date(b.date) - new Date(a.date);
+    return parseDate(b.date) - parseDate(a.date);
   });
 
   const wrap = document.getElementById('grid-wrap');
@@ -497,7 +504,7 @@ function openM(i) {
   const posts = filteredView();
   posts.sort((a,b) => {
     if (!a.date) return 1; if (!b.date) return -1;
-    return new Date(b.date) - new Date(a.date);
+    return parseDate(b.date) - parseDate(a.date);
   });
   const capped = posts.slice(0, 15);
   const p = capped[i]; if (!p) return;
