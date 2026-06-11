@@ -61,7 +61,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .d-up{background:#facc15}
 .d-td{background:#f97316}
 .d-pb{background:#4ade80}
-.dimmed::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,.25);pointer-events:none}
 .empty-cell{aspect-ratio:4/5;background:#fafafa;display:flex;align-items:center;justify-content:center;color:#e5e5e5;font-size:22px}
 
 /* post type icons */
@@ -473,7 +472,7 @@ function renderGrid() {
     if (!p) { h += '<div class="empty-cell">+</div>'; continue; }
     const t = thumb(p.url);
     const s = status(p.date);
-    h += `<div class="cell${s==='pb'?' dimmed':''}" onclick="openM(${i})">
+    h += `<div class="cell" onclick="openM(${i})">
       ${t
         ? `<img src="${t}" alt="" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><div class="no-img" style="display:none;position:absolute;inset:0">&#128247;</div>`
         : `<div class="no-img">&#128247;</div>`}
